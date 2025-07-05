@@ -16,14 +16,6 @@ const User = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
-    balance: {
-      type: DataTypes.FLOAT,
-      defaultValue: 0,
-    },
-    referralCount: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
-    },
     isAdmin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
