@@ -1,11 +1,12 @@
 const userController = require("./userController");
+const adminController = require("./adminController");
 
 module.exports = {
   raffle(ctx) {
-    return ctx.reply(
-      'Раздел "🎁 Розыгрыш" в разработке',
-      userController.getMainMenuKeyboard()
-    );
+    const keyboard = ctx.isAdmin
+      ? adminController.getAdminMenuKeyboard()
+      : userController.getMainMenuKeyboard();
+    return ctx.reply('Раздел "🎁 Розыгрыш"', keyboard);
   },
 
   myTickets(ctx) {

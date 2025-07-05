@@ -1,7 +1,12 @@
 const User = require("../models/User");
 const { Markup } = require("telegraf");
+const adminController = require("./adminController");
 
-const getMainMenuKeyboard = () => {
+const getMainMenuKeyboard = (isAdmin = false) => {
+  if (isAdmin) {
+    return adminController.getAdminMenuKeyboard();
+  }
+
   return Markup.keyboard([
     ["🎁 Розыгрыш", "🎫 Мои билеты"],
     ["👥 Рефералы", "📜 История"],
@@ -26,6 +31,9 @@ module.exports = {
         Markup.button.callback("📜 Правила", "show_rules"),
       ])
     );
+    if (isAdmin) {
+      await ctx.reply("Вы вошли как администратор.", getMainMenuKeyboard(true));
+    }
   },
 
   async showRules(ctx) {
