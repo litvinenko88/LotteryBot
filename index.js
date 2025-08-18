@@ -26,6 +26,8 @@ bot.hears("💰 Кошелек", menuController.wallet);
 
 // Админ-меню
 bot.hears("🛠 Админ-панель", adminController.showAdminPanel);
+bot.hears("📊 Статистика", adminController.showStats);
+bot.hears("👥 Список участников", adminController.showUsers);
 bot.hears("🔙 Главное меню", adminController.backToMainMenu);
 
 // Инициализация базы данных
