@@ -65,6 +65,12 @@ class UserService {
   async getUser(telegramId) {
     return this.User.findOne({ where: { telegramId: String(telegramId) } });
   }
+
+  async getAllUsers() {
+    return await this.User.findAll({
+      where: { rulesAccepted: true }
+    });
+  }
 }
 
 module.exports = UserService;

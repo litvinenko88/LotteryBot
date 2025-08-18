@@ -20,9 +20,13 @@ class BotService {
     this.dbService = new DatabaseService(sequelize);
     await this.dbService.init();
     
+    // Регистрируем модель Lottery
+    const LotteryModel = require('../models/Lottery');
+    this.dbService.sequelize.define('Lottery', LotteryModel(this.dbService.sequelize).rawAttributes, LotteryModel(this.dbService.sequelize).options);
+    
     this.userService = new UserService(this.dbService.getModel('User'));
     this.startHandler = new StartHandler(this.userService);
-    this.adminHandler = new AdminHandler(this.userService);
+    this.adminHandler = new AdminHandler(this.userService, this.bot);
     this.lotteryHandler = new LotteryHandler(this.userService);
     this.testHandler = new TestHandler(this.userService, this.startHandler, this.adminHandler);
     
@@ -44,7 +48,10 @@ class BotService {
     this.bot.hears('🛠 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('📊 Статистика', (ctx) => this.adminHandler.showStats(ctx));
     this.bot.hears('👥 Подписчики', (ctx) => this.adminHandler.showSubscribers(ctx));
-    this.bot.hears('➕ Добавить розыгрыш', (ctx) => this.lotteryHandler.addLottery(ctx));
+    this.bot.hears('➕ Добавить розыгрыш', (ctx) => this.adminHandler.startLotteryCreation(ctx));
+    this.bot.hears('👁 Просмотреть', (ctx) => this.adminHandler.previewLottery(ctx));
+    this.bot.hears('✏️ Редактировать', (ctx) => this.adminHandler.editLottery(ctx));
+    this.bot.hears('✅ Добавить', (ctx) => this.adminHandler.saveLottery(ctx));
     this.bot.hears('🏆 Завершить розыгрыш', (ctx) => this.lotteryHandler.finishLottery(ctx));
     this.bot.hears('💰 Установить цену', (ctx) => this.lotteryHandler.setPrice(ctx));
     this.bot.hears('✉ Рассылка', (ctx) => this.lotteryHandler.broadcast(ctx));
@@ -69,11 +76,19 @@ class BotService {
     this.bot.hears('✅ Я ознакомился с правилами', (ctx) => this.startHandler.acceptRules(ctx));
     
     // Общий обработчик сообщений
-    this.bot.on('text', async (ctx) => {
+    this.bot.on('message', async (ctx) => {
+      // Проверяем создание розыгрыша (текст и фото)
+      if (await this.adminHandler.handleLotteryCreation(ctx)) {
+        return;
+      }
+      
       // Проверяем тестовый режим
       if (await this.testHandler.handleTestModeMessage(ctx)) {
         return;
       }
+      
+      // Обработка только текстовых сообщений
+      if (!ctx.message.text) return;
       
       // Обработка основных кнопок
       const text = ctx.message.text;
