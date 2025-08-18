@@ -52,6 +52,11 @@ class BotService {
     this.bot.hears('👁 Просмотреть', (ctx) => this.adminHandler.previewLottery(ctx));
     this.bot.hears('✏️ Редактировать', (ctx) => this.adminHandler.editLottery(ctx));
     this.bot.hears('✅ Добавить', (ctx) => this.adminHandler.saveLottery(ctx));
+    
+    // Обработчик inline кнопок
+    this.bot.action('buy_ticket', (ctx) => {
+      ctx.answerCbQuery('🎫 Покупка билетов в разработке');
+    });
     this.bot.hears('🏆 Завершить розыгрыш', (ctx) => this.lotteryHandler.finishLottery(ctx));
     this.bot.hears('💰 Установить цену', (ctx) => this.lotteryHandler.setPrice(ctx));
     this.bot.hears('✉ Рассылка', (ctx) => this.lotteryHandler.broadcast(ctx));

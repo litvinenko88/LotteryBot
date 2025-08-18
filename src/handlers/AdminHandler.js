@@ -31,7 +31,7 @@ class AdminHandler {
     if (!this.isAdmin(ctx)) return;
     
     this.lotteryCreation.set(ctx.from.id, { step: 'title' });
-    await ctx.reply('➕ СОЗДАНИЕ РОЗЫГРЫША\n\nШаг 1/8: Введите название товара:');
+    await ctx.reply('➕ СОЗДАНИЕ РОЗЫГРЫША\n\nШаг 1/10: Введите название товара:');
   }
 
   async handleLotteryCreation(ctx) {
@@ -48,7 +48,7 @@ class AdminHandler {
         if (!text) return false;
         creation.title = text;
         creation.step = 'price';
-        await ctx.reply('Шаг 2/8: Введите стоимость билета (в рублях):');
+        await ctx.reply('Шаг 2/10: Введите стоимость билета (в рублях):');
         break;
         
       case 'price':
@@ -58,21 +58,21 @@ class AdminHandler {
         }
         creation.price = parseFloat(text);
         creation.step = 'description';
-        await ctx.reply('Шаг 3/8: Введите описание товара:');
+        await ctx.reply('Шаг 3/10: Введите описание товара:');
         break;
         
       case 'description':
         if (!text) return false;
         creation.description = text;
         creation.step = 'link';
-        await ctx.reply('Шаг 4/8: Введите ссылку на товар:');
+        await ctx.reply('Шаг 4/10: Введите ссылку на товар:');
         break;
         
       case 'link':
         if (!text) return false;
         creation.link = text;
         creation.step = 'photo';
-        await ctx.reply('Шаг 5/8: Отправьте фото товара:');
+        await ctx.reply('Шаг 5/10: Отправьте фото товара:');
         break;
         
       case 'photo':
@@ -82,7 +82,7 @@ class AdminHandler {
         }
         creation.photoId = photo[photo.length - 1].file_id;
         creation.step = 'tickets';
-        await ctx.reply('Шаг 6/8: Введите количество билетов для начала розыгрыша:');
+        await ctx.reply('Шаг 6/10: Введите количество билетов для начала розыгрыша:');
         break;
         
       case 'tickets':
@@ -92,7 +92,7 @@ class AdminHandler {
         }
         creation.maxTickets = parseInt(text);
         creation.step = 'date';
-        await ctx.reply('Шаг 7/8: Введите дату проведения розыгрыша (формат: ДД.ММ.ГГГГ):');
+        await ctx.reply('Шаг 7/10: Введите дату публикации розыгрыша (формат: ДД.ММ.ГГГГ):');
         break;
         
       case 'date':
@@ -102,7 +102,7 @@ class AdminHandler {
         }
         creation.date = text;
         creation.step = 'time';
-        await ctx.reply('Шаг 8/8: Введите время проведения розыгрыша (формат: ЧЧ:ММ):');
+        await ctx.reply('Шаг 8/10: Введите время публикации розыгрыша (формат: ЧЧ:ММ):');
         break;
         
       case 'time':
@@ -111,6 +111,26 @@ class AdminHandler {
           return true;
         }
         creation.time = text;
+        creation.step = 'endDate';
+        await ctx.reply('Шаг 9/10: Введите дату окончания розыгрыша (формат: ДД.ММ.ГГГГ):');
+        break;
+        
+      case 'endDate':
+        if (!text || !/^\d{2}\.\d{2}\.\d{4}$/.test(text)) {
+          await ctx.reply('Ошибка! Введите дату в формате ДД.ММ.ГГГГ:');
+          return true;
+        }
+        creation.endDate = text;
+        creation.step = 'endTime';
+        await ctx.reply('Шаг 10/10: Введите время окончания розыгрыша (формат: ЧЧ:ММ):');
+        break;
+        
+      case 'endTime':
+        if (!text || !/^\d{2}:\d{2}$/.test(text)) {
+          await ctx.reply('Ошибка! Введите время в формате ЧЧ:ММ:');
+          return true;
+        }
+        creation.endTime = text;
         creation.step = 'complete';
         await this.showLotteryPreview(ctx, creation);
         break;
@@ -124,8 +144,7 @@ class AdminHandler {
     const message = `🎁 ${lottery.title}\n\n` +
       `💰 Стоимость билета: ${lottery.price} руб.\n` +
       `🎫 Куплено билетов: 0/${lottery.maxTickets}\n` +
-      `📅 Дата: ${lottery.date}\n` +
-      `⏰ Время: ${lottery.time}\n\n` +
+      `📅 Окончание: ${lottery.endDate} в ${lottery.endTime}\n\n` +
       `📝 ${lottery.description}\n\n` +
       `🔗 ${lottery.link}`;
 
@@ -146,13 +165,15 @@ class AdminHandler {
     const message = `🎁 ${creation.title}\n\n` +
       `💰 Стоимость билета: ${creation.price} руб.\n` +
       `🎫 Куплено билетов: 0/${creation.maxTickets}\n` +
-      `📅 Дата: ${creation.date}\n` +
-      `⏰ Время: ${creation.time}\n\n` +
+      `📅 Окончание: ${creation.endDate} в ${creation.endTime}\n\n` +
       `📝 ${creation.description}\n\n` +
-      `🔗 ${creation.link}\n\n` +
-      `🎫 Купить билет`;
+      `🔗 ${creation.link}`;
 
-    await ctx.replyWithPhoto(creation.photoId, { caption: message });
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('🎫 Купить билет', 'buy_ticket')]
+    ]);
+
+    await ctx.replyWithPhoto(creation.photoId, { caption: message, reply_markup: keyboard.reply_markup });
     await ctx.reply('👆 Так будет выглядеть карточка у пользователей');
   }
 
@@ -160,7 +181,7 @@ class AdminHandler {
     if (!this.isAdmin(ctx)) return;
     
     this.lotteryCreation.set(ctx.from.id, { step: 'title' });
-    await ctx.reply('✏️ РЕДАКТИРОВАНИЕ\n\nШаг 1/8: Введите новое название товара:');
+    await ctx.reply('✏️ РЕДАКТИРОВАНИЕ\n\nШаг 1/10: Введите новое название товара:');
   }
 
   async saveLottery(ctx) {
@@ -207,11 +228,18 @@ class AdminHandler {
   async sendLotteryToUsers(lottery) {
     try {
       const users = await this.userService.getAllUsers();
-      const message = `🎉 НОВЫЙ РОЗЫГРЫШ!\n\n🎁 ${lottery.title}\n\n💰 Стоимость билета: ${lottery.price} руб.\n🎫 Куплено билетов: 0/${lottery.maxTickets}\n📅 Дата: ${lottery.date}\n⏰ Время: ${lottery.time}\n\n📝 ${lottery.description}\n\n🔗 ${lottery.link}\n\n🎫 Купить билет`;
+      const message = `🎉 НОВЫЙ РОЗЫГРЫШ!\n\n🎁 ${lottery.title}\n\n💰 Стоимость билета: ${lottery.price} руб.\n🎫 Куплено билетов: 0/${lottery.maxTickets}\n📅 Окончание: ${lottery.endDate} в ${lottery.endTime}\n\n📝 ${lottery.description}\n\n🔗 ${lottery.link}`;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🎫 Купить билет', 'buy_ticket')]
+      ]);
       
       for (const user of users) {
         try {
-          await this.bot.telegram.sendPhoto(user.telegramId, lottery.photoId, { caption: message });
+          await this.bot.telegram.sendPhoto(user.telegramId, lottery.photoId, { 
+            caption: message,
+            reply_markup: keyboard.reply_markup
+          });
         } catch (error) {
           // Пропускаем ошибки отправки
         }
