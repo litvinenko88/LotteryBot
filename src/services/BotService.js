@@ -38,7 +38,7 @@ class BotService {
     
     this.bot.hears('🛠 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('📊 Статистика', (ctx) => this.adminHandler.showStats(ctx));
-    this.bot.hears('👥 Список участников', (ctx) => this.adminHandler.showUsers(ctx));
+    this.bot.hears('👥 Подписчики', (ctx) => this.adminHandler.showSubscribers(ctx));
     
     this.bot.hears('🔙 Главное меню', (ctx) => this.startHandler.handle(ctx));
     

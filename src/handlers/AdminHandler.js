@@ -14,7 +14,7 @@ class AdminHandler {
     if (!this.isAdmin(ctx)) return;
     
     const keyboard = Markup.keyboard([
-      ['📊 Статистика', '👥 Список участников'],
+      ['📊 Статистика', '👥 Подписчики'],
       ['➕ Добавить розыгрыш', '🏆 Завершить розыгрыш'],
       ['💰 Установить цену', '✉ Рассылка'],
       ['🔙 Главное меню']
@@ -56,6 +56,34 @@ class AdminHandler {
       await ctx.reply(message);
     } catch (error) {
       await ctx.reply('Ошибка получения списка пользователей');
+    }
+  }
+
+  async showSubscribers(ctx) {
+    if (!this.isAdmin(ctx)) return;
+
+    try {
+      const users = await this.userService.getRecentUsers();
+      const stats = await this.userService.getStats();
+      
+      if (users.length === 0) {
+        await ctx.reply('Подписчиков не найдено');
+        return;
+      }
+
+      let message = `👥 Подписчики (${stats.total}):\n\n`;
+      
+      users.forEach((user, index) => {
+        const name = user.firstName || 'Неизвестный';
+        const username = user.username ? `@${user.username}` : 'Нет ника';
+        const date = new Date(user.createdAt).toLocaleDateString('ru-RU');
+        
+        message += `${index + 1}. ${name}\n${username}\nДата: ${date}\n\n`;
+      });
+
+      await ctx.reply(message);
+    } catch (error) {
+      await ctx.reply('Ошибка получения списка подписчиков');
     }
   }
 }
