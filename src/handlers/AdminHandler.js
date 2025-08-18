@@ -149,7 +149,7 @@ class AdminHandler {
   async notifyAllUsers(lottery) {
     try {
       const users = await this.userService.getAllUsers();
-      const message = `🎉 НОВЫЙ РОЗЫГРЫШ!\n\n🎁 ${lottery.title}\n💰 Стоимость билета: ${lottery.price} руб.\n\nПринимайте участие! 🎫`;
+      const message = `🎉 НОВЫЙ РОЗЫГРЫШ!\n\n🎁 ${lottery.title}\n\n💰 Стоимость билета: ${lottery.price} руб.\n👥 Участников: 0/100\n\n📝 ${lottery.description}\n\n🔗 ${lottery.link}\n\n🎫 Купить билет`;
       
       for (const user of users) {
         try {
