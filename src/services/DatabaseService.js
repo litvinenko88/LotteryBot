@@ -27,7 +27,8 @@ class DatabaseService {
       defaults: {
         username: 'admin',
         firstName: 'Admin',
-        isAdmin: true
+        isAdmin: true,
+        rulesAccepted: false
       }
     });
     

@@ -54,6 +54,17 @@ class UserService {
       limit
     });
   }
+
+  async acceptRules(telegramId) {
+    await this.User.update(
+      { rulesAccepted: true },
+      { where: { telegramId: String(telegramId) } }
+    );
+  }
+
+  async getUser(telegramId) {
+    return this.User.findOne({ where: { telegramId: String(telegramId) } });
+  }
 }
 
 module.exports = UserService;

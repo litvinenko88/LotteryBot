@@ -4,6 +4,8 @@ const DatabaseService = require('./DatabaseService');
 const UserService = require('./UserService');
 const StartHandler = require('../handlers/StartHandler');
 const AdminHandler = require('../handlers/AdminHandler');
+const TestHandler = require('../handlers/TestHandler');
+const LotteryHandler = require('../handlers/LotteryHandler');
 
 class BotService {
   constructor(bot) {
@@ -21,6 +23,8 @@ class BotService {
     this.userService = new UserService(this.dbService.getModel('User'));
     this.startHandler = new StartHandler(this.userService);
     this.adminHandler = new AdminHandler(this.userService);
+    this.lotteryHandler = new LotteryHandler(this.userService);
+    this.testHandler = new TestHandler(this.userService, this.startHandler, this.adminHandler);
     
     this.setupHandlers();
     logger.info('BotService инициализирован');
@@ -36,14 +40,75 @@ class BotService {
   setupHandlers() {
     this.bot.start((ctx) => this.startHandler.handle(ctx));
     
+    // Админ обработчики
     this.bot.hears('🛠 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('📊 Статистика', (ctx) => this.adminHandler.showStats(ctx));
     this.bot.hears('👥 Подписчики', (ctx) => this.adminHandler.showSubscribers(ctx));
+    this.bot.hears('➕ Добавить розыгрыш', (ctx) => this.lotteryHandler.addLottery(ctx));
+    this.bot.hears('🏆 Завершить розыгрыш', (ctx) => this.lotteryHandler.finishLottery(ctx));
+    this.bot.hears('💰 Установить цену', (ctx) => this.lotteryHandler.setPrice(ctx));
+    this.bot.hears('✉ Рассылка', (ctx) => this.lotteryHandler.broadcast(ctx));
     
+    // Тестовые обработчики
+    this.bot.hears('🧪 Режим тестирования', (ctx) => this.testHandler.showTestPanel(ctx));
+    this.bot.hears('🧪 Тест как новый пользователь', (ctx) => this.testHandler.testAsNewUser(ctx));
+    this.bot.hears('🧪 Тест как старый пользователь', (ctx) => this.testHandler.testAsOldUser(ctx));
+    this.bot.hears('🧪 Тест без принятых правил', (ctx) => this.testHandler.testWithoutRules(ctx));
+    this.bot.hears('🧪 Тест с принятыми правилами', (ctx) => this.testHandler.testWithRules(ctx));
+    this.bot.hears('🧪 Показать все кнопки пользователя', (ctx) => this.testHandler.showAllUserButtons(ctx));
+    this.bot.hears('🧪 Показать все админ кнопки', (ctx) => this.testHandler.showAllAdminButtons(ctx));
+    this.bot.hears('🧪 Симуляция полного процесса', (ctx) => this.testHandler.simulateFullProcess(ctx));
+    this.bot.hears('🔙 Назад в админ-панель', (ctx) => this.testHandler.exitTestMode(ctx));
+    this.bot.hears('❌ Отмена', (ctx) => this.adminHandler.showPanel(ctx));
+    this.bot.hears('🔙 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
+    
+    // Основные обработчики
     this.bot.hears('🔙 Главное меню', (ctx) => this.startHandler.handle(ctx));
     
-    this.bot.hears(['🎁 Розыгрыш', '🎫 Мои билеты', '👥 Рефералы', '📜 История', '💰 Кошелек'], 
-      (ctx) => ctx.reply(`Раздел "${ctx.message.text}" в разработке`));
+    this.bot.hears('📜 Ознакомиться с правилами', (ctx) => this.startHandler.showRules(ctx));
+    this.bot.hears('✅ Я ознакомился с правилами', (ctx) => this.startHandler.acceptRules(ctx));
+    
+    // Общий обработчик сообщений
+    this.bot.on('text', async (ctx) => {
+      // Проверяем тестовый режим
+      if (await this.testHandler.handleTestModeMessage(ctx)) {
+        return;
+      }
+      
+      // Обработка основных кнопок
+      const text = ctx.message.text;
+      
+      switch (text) {
+        case '🎁 Розыгрыш':
+          await this.lotteryHandler.showLotteries(ctx);
+          break;
+        case '🎫 Мои билеты':
+          await this.lotteryHandler.showMyTickets(ctx);
+          break;
+        case '👥 Рефералы':
+          await this.lotteryHandler.showReferrals(ctx);
+          break;
+        case '📜 История':
+          await this.lotteryHandler.showHistory(ctx);
+          break;
+        case '💰 Кошелек':
+          await this.lotteryHandler.showWallet(ctx);
+          break;
+        case '💳 Пополнить кошелек':
+          await ctx.reply('💳 ПОПОЛНЕНИЕ КОШЕЛЬКА\n\nВыберите способ пополнения:', 
+            Markup.keyboard([['💳 Банковская карта', '📱 СБП'], ['🔙 Назад']]).resize());
+          break;
+        case '📊 История операций':
+          await ctx.reply('📊 История операций пуста');
+          break;
+        case '📤 Поделиться ссылкой':
+          await ctx.reply('📤 Поделитесь этой ссылкой с друзьями:\nhttps://t.me/your_bot?start=ref_' + ctx.from.id);
+          break;
+        case '🔙 Назад':
+          await this.startHandler.handle(ctx);
+          break;
+      }
+    });
   }
 }
 

@@ -14,6 +14,14 @@ module.exports = (sequelize) => {
     isAdmin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
+    },
+    rulesAccepted: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    balance: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.00
     }
   }, {
     timestamps: true,
