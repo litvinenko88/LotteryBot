@@ -8,14 +8,22 @@ class UserService {
 
   async createOrGetUser(telegramUser) {
     try {
+      const config = require('../config');
+      const isAdmin = String(telegramUser.id) === config.ADMIN_ID;
+      
       const [user, created] = await this.User.findOrCreate({
         where: { telegramId: String(telegramUser.id) },
         defaults: {
           username: telegramUser.username || null,
           firstName: telegramUser.first_name || null,
-          lastName: telegramUser.last_name || null
+          lastName: telegramUser.last_name || null,
+          isAdmin
         }
       });
+
+      if (!created && isAdmin && !user.isAdmin) {
+        await user.update({ isAdmin: true });
+      }
 
       if (created) {
         logger.info(`Новый пользователь: ${logger.sanitize(telegramUser.id)}`);

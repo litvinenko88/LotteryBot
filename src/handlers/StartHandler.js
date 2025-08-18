@@ -1,4 +1,6 @@
 const { Markup } = require('telegraf');
+const { InputFile } = require('telegraf');
+const path = require('path');
 const config = require('../config');
 
 class StartHandler {
@@ -12,17 +14,20 @@ class StartHandler {
       const isAdmin = user.telegramId === config.ADMIN_ID;
       
       const keyboard = this.getMainKeyboard(isAdmin);
+      const welcomeText = 'Привет! 🎉 Добро пожаловать в наш чат-бот, где мечты становятся реальностью! Здесь ты можешь участвовать в захватывающих розыгрышах товаров с Wildberries и Ozon. 🛍️✨ Просто следуй инструкциям, и, возможно, именно ты станешь счастливым обладателем крутого приза! Удачи! 🍀 Если у тебя есть вопросы, не стесняйся — я всегда на связи!';
       
-      if (isNew) {
-        await ctx.reply(
-          `Добро пожаловать, ${ctx.from.first_name || 'пользователь'}! 🎉\n\nВы зарегистрированы в боте для участия в розыгрышах!`,
-          keyboard
+      const imagePath = path.join(__dirname, '../../images/start.jpg');
+      
+      try {
+        await ctx.replyWithPhoto(
+          new InputFile(imagePath),
+          {
+            caption: welcomeText,
+            reply_markup: keyboard.reply_markup
+          }
         );
-      } else {
-        await ctx.reply(
-          `С возвращением, ${user.firstName || 'пользователь'}! 👋`,
-          keyboard
-        );
+      } catch (photoError) {
+        await ctx.reply(welcomeText, keyboard);
       }
     } catch (error) {
       await ctx.reply('Произошла ошибка. Попробуйте позже.');

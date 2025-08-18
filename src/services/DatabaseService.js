@@ -22,7 +22,7 @@ class DatabaseService {
   }
 
   async createAdmin() {
-    const [admin] = await this.models.User.findOrCreate({
+    const [admin, created] = await this.models.User.findOrCreate({
       where: { telegramId: config.ADMIN_ID },
       defaults: {
         username: 'admin',
@@ -30,7 +30,12 @@ class DatabaseService {
         isAdmin: true
       }
     });
-    logger.info(`Админ создан: ${logger.sanitize(admin.telegramId)}`);
+    
+    if (!admin.isAdmin) {
+      await admin.update({ isAdmin: true });
+    }
+    
+    logger.info(`Админ ${created ? 'создан' : 'обновлен'}: ${logger.sanitize(admin.telegramId)}`);
   }
 
   getModel(name) {
