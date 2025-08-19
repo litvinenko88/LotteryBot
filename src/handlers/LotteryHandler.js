@@ -2,10 +2,11 @@ const { Markup } = require('telegraf');
 const config = require('../config');
 
 class LotteryHandler {
-  constructor(userService) {
+  constructor(userService, walletService) {
     this.userService = userService;
-    this.lotteries = new Map(); // Временное хранилище розыгрышей
-    this.tickets = new Map(); // Временное хранилище билетов
+    this.walletService = walletService;
+    this.lotteries = new Map();
+    this.tickets = new Map();
   }
 
   isAdmin(ctx) {
@@ -40,93 +41,75 @@ class LotteryHandler {
     await ctx.reply(message, Markup.keyboard(buttons).resize());
   }
 
-  // Показать билеты пользователя
   async showMyTickets(ctx) {
     const user = await this.userService.getUser(ctx.from.id);
     if (!user || !user.rulesAccepted) {
       return ctx.reply('Сначала ознакомьтесь с правилами!');
     }
 
-    const userTickets = Array.from(this.tickets.values()).filter(
-      ticket => ticket.userId === ctx.from.id
+    // Получаем билеты из AdminHandler
+    const userTickets = Array.from(global.adminHandler?.tickets?.values() || []).filter(
+      ticket => ticket.userId == ctx.from.id
     );
 
     if (userTickets.length === 0) {
-      return ctx.reply('🎫 У вас пока нет билетов\\n\\nПриобретите билет в разделе "🎁 Розыгрыш"');
+      const keyboard = Markup.keyboard([['🔙 Главное меню']]).resize();
+      return ctx.reply('🎫 У вас пока нет билетов\n\nПриобретите билет в разделе "🎁 Розыгрыш"', keyboard);
     }
 
-    let message = '🎫 ВАШИ БИЛЕТЫ:\\n\\n';
+    let message = '🎫 ВАШИ БИЛЕТЫ:\n\n';
     
     userTickets.forEach((ticket, index) => {
-      message += `${index + 1}. ${ticket.lotteryTitle}\\n`;
-      message += `🎫 Номер билета: ${ticket.number}\\n`;
-      message += `📅 Дата покупки: ${ticket.purchaseDate}\\n`;
-      message += `🎯 Статус: ${ticket.status}\\n\\n`;
+      message += `${index + 1}. ${ticket.lotteryTitle || 'Неизвестный розыгрыш'}\n`;
+      message += `🆔 ID: ${ticket.id}\n`;
+      message += `💰 Цена: ${ticket.price} руб.\n`;
+      message += `📅 Дата: ${ticket.createdAt.toLocaleDateString('ru-RU')}\n\n`;
     });
 
-    await ctx.reply(message);
+    const keyboard = Markup.keyboard([['🔙 Главное меню']]).resize();
+    await ctx.reply(message, keyboard);
   }
 
-  // Показать кошелек
   async showWallet(ctx) {
     const user = await this.userService.getUser(ctx.from.id);
     if (!user || !user.rulesAccepted) {
       return ctx.reply('Сначала ознакомьтесь с правилами!');
     }
 
-    const balance = user.balance || 0;
-    
-    const message = `💰 ВАШ КОШЕЛЕК\\n\\n💳 Баланс: ${balance} руб.\\n\\n💡 Пополните кошелек для участия в розыгрышах`;
-    
-    const keyboard = Markup.keyboard([
-      ['💳 Пополнить кошелек'],
-      ['📊 История операций'],
-      ['🔙 Главное меню']
-    ]).resize();
-
-    await ctx.reply(message, keyboard);
+    return this.walletService.showWallet(ctx);
   }
 
-  // Показать рефералов
   async showReferrals(ctx) {
     const user = await this.userService.getUser(ctx.from.id);
     if (!user || !user.rulesAccepted) {
       return ctx.reply('Сначала ознакомьтесь с правилами!');
     }
 
-    const referralLink = `https://t.me/your_bot?start=ref_${ctx.from.id}`;
-    const referralsCount = 0; // Заглушка
-    const referralBonus = referralsCount * 50; // 50 руб за реферала
-
-    const message = `👥 РЕФЕРАЛЬНАЯ СИСТЕМА\\n\\n` +
-      `🔗 Ваша ссылка:\\n${referralLink}\\n\\n` +
-      `👥 Приглашено: ${referralsCount} человек\\n` +
-      `💰 Заработано: ${referralBonus} руб.\\n\\n` +
-      `💡 За каждого приглашенного друга вы получаете 50 рублей на баланс!`;
-
-    const keyboard = Markup.keyboard([
-      ['📤 Поделиться ссылкой'],
-      ['🔙 Главное меню']
-    ]).resize();
-
-    await ctx.reply(message, keyboard);
+    return global.referralService?.showReferrals(ctx) || ctx.reply('Функция в разработке');
   }
 
-  // Показать историю
   async showHistory(ctx) {
     const user = await this.userService.getUser(ctx.from.id);
     if (!user || !user.rulesAccepted) {
       return ctx.reply('Сначала ознакомьтесь с правилами!');
     }
 
-    const message = `📜 ИСТОРИЯ УЧАСТИЯ\\n\\n` +
-      `🎫 Всего билетов: 0\\n` +
-      `🏆 Выигрышей: 0\\n` +
-      `💰 Потрачено: 0 руб.\\n` +
-      `🎁 Выиграно: 0 руб.\\n\\n` +
-      `📊 История пуста. Начните участвовать в розыгрышах!`;
+    const userTickets = Array.from(global.adminHandler?.tickets?.values() || []).filter(
+      ticket => ticket.userId == ctx.from.id
+    );
+    
+    const totalSpent = userTickets.reduce((sum, ticket) => sum + parseFloat(ticket.price), 0);
+    const totalTickets = userTickets.length;
 
-    await ctx.reply(message);
+    const message = `📜 ИСТОРИЯ УЧАСТИЯ\n\n` +
+      `🎫 Всего билетов: ${totalTickets}\n` +
+      `🏆 Выигрышей: 0\n` +
+      `💰 Потрачено: ${totalSpent} руб.\n` +
+      `🎁 Выиграно: 0 руб.\n\n` +
+      (totalTickets === 0 ? '📊 История пуста. Начните участвовать в розыгрышах!' : '📊 Удачи в будущих розыгрышах!');
+
+    const keyboard = Markup.keyboard([['🔙 Главное меню']]).resize();
+    await ctx.reply(message, keyboard);
   }
 
   // Админские функции

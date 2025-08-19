@@ -5,23 +5,50 @@ const fs = require('fs');
 const config = require('../config');
 
 class StartHandler {
-  constructor(userService) {
+  constructor(userService, referralService) {
     this.userService = userService;
+    this.referralService = referralService;
   }
 
   async handle(ctx) {
     try {
+      // Проверяем реферальную ссылку
+      const startPayload = ctx.message?.text?.split(' ')[1];
+      let referrerId = null;
+      if (startPayload && startPayload.startsWith('ref_')) {
+        referrerId = startPayload.replace('ref_', '');
+      }
+      
       const { user, isNew } = await this.userService.createOrGetUser(ctx.from);
       const isAdmin = user.telegramId === config.ADMIN_ID;
       
-      const welcomeText = 'Привет! 🎉 Добро пожаловать в наш чат-бот, где мечты становятся реальностью! Здесь ты можешь участвовать в захватывающих розыгрышах товаров с Wildberries и Ozon. 🛍️✨ Просто следуй инструкциям, и, возможно, именно ты станешь счастливым обладателем крутого приза! Удачи! 🍀';
+      // Обрабатываем реферала
+      if (isNew && referrerId && this.referralService) {
+        const success = await this.referralService.processReferral(ctx.from.id, referrerId);
+        if (success) {
+          setTimeout(() => {
+            ctx.reply('🎉 Вы пришли по реферальной ссылке! Ваш друг получил бонус!');
+          }, 2000);
+        }
+      }
       
-      const imagePath = path.join(process.cwd(), 'images', 'start.jpg');
+      let welcomeText;
+      if (isNew) {
+        welcomeText = 'Привет! 🎉 Добро пожаловать в наш чат-бот, где мечты становятся реальностью! Здесь ты можешь участвовать в захватывающих розыгрышах товаров с Wildberries и Ozon. 🛍️✨ Просто следуй инструкциям, и, возможно, именно ты станешь счастливым обладателем крутого приза! Удачи! 🍀';
+      } else {
+        welcomeText = 'С возвращением! 👋 Все ваши данные сохранены.';
+      }
       
-      if (fs.existsSync(imagePath)) {
-        try {
-          await ctx.replyWithPhoto({ source: imagePath }, { caption: welcomeText });
-        } catch (photoError) {
+      if (isNew) {
+        const imagePath = path.join(process.cwd(), 'images', 'start.jpg');
+        
+        if (fs.existsSync(imagePath)) {
+          try {
+            await ctx.replyWithPhoto({ source: imagePath }, { caption: welcomeText });
+          } catch (photoError) {
+            await ctx.reply(welcomeText);
+          }
+        } else {
           await ctx.reply(welcomeText);
         }
       } else {

@@ -2,13 +2,14 @@ const { Markup } = require('telegraf');
 const config = require('../config');
 
 class AdminHandler {
-  constructor(userService, bot) {
+  constructor(userService, bot, walletService) {
     this.userService = userService;
     this.bot = bot;
+    this.walletService = walletService;
     this.lotteryCreation = new Map();
-    this.activeLotteries = new Map(); // Активные розыгрыши
-    this.tickets = new Map(); // Билеты
-    this.views = new Map(); // Просмотры
+    this.activeLotteries = new Map();
+    this.tickets = new Map();
+    this.views = new Map();
   }
 
   isAdmin(ctx) {
@@ -326,12 +327,23 @@ class AdminHandler {
     const lottery = this.activeLotteries.get(lotteryId);
     if (!lottery) return null;
     
+    // Проверяем баланс
+    const balance = await this.walletService.getBalance(userId);
+    if (balance < lottery.price) {
+      return { error: 'insufficient_funds', balance, required: lottery.price };
+    }
+    
+    // Списываем средства
+    const newBalance = await this.walletService.deductBalance(userId, lottery.price, `Покупка билета - ${lottery.title}`);
+    if (newBalance === false) return null;
+    
     const ticketId = `T${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const ticket = {
       id: ticketId,
       lotteryId: lotteryId,
       userId: userId,
       price: lottery.price,
+      lotteryTitle: lottery.title,
       createdAt: new Date()
     };
     
@@ -419,7 +431,8 @@ class AdminHandler {
       const message = `📊 Статистика бота:\n\n👥 Всего пользователей: ${stats.total}\n🆕 Новых сегодня: ${stats.today}`;
       await ctx.reply(message);
     } catch (error) {
-      await ctx.reply('Ошибка получения статистики');
+      const keyboard = Markup.keyboard([['🔙 Назад в админ-панель']]).resize();
+      await ctx.reply('Ошибка получения статистики', keyboard);
     }
   }
 
@@ -455,7 +468,8 @@ class AdminHandler {
       const stats = await this.userService.getStats();
       
       if (users.length === 0) {
-        await ctx.reply('Подписчиков не найдено');
+        const keyboard = Markup.keyboard([['🔙 Назад в админ-панель']]).resize();
+        await ctx.reply('Подписчиков не найдено', keyboard);
         return;
       }
 
@@ -466,9 +480,11 @@ class AdminHandler {
         message += `${index + 1}. ${username}\n`;
       });
 
-      await ctx.reply(message);
+      const keyboard = Markup.keyboard([['🔙 Назад в админ-панель']]).resize();
+      await ctx.reply(message, keyboard);
     } catch (error) {
-      await ctx.reply('Ошибка получения списка подписчиков');
+      const keyboard = Markup.keyboard([['🔙 Назад в админ-панель']]).resize();
+      await ctx.reply('Ошибка получения списка подписчиков', keyboard);
     }
   }
 }

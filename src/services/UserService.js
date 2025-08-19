@@ -71,6 +71,13 @@ class UserService {
       where: { rulesAccepted: true }
     });
   }
+
+  async updateBalance(telegramId, newBalance) {
+    await this.User.update(
+      { balance: newBalance },
+      { where: { telegramId: String(telegramId) } }
+    );
+  }
 }
 
 module.exports = UserService;

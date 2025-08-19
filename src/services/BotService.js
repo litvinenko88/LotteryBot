@@ -6,6 +6,8 @@ const StartHandler = require('../handlers/StartHandler');
 const AdminHandler = require('../handlers/AdminHandler');
 const TestHandler = require('../handlers/TestHandler');
 const LotteryHandler = require('../handlers/LotteryHandler');
+const WalletService = require('./WalletService');
+const ReferralService = require('./ReferralService');
 
 class BotService {
   constructor(bot) {
@@ -30,10 +32,18 @@ class BotService {
     this.dbService.sequelize.define('LotteryView', LotteryViewModel(this.dbService.sequelize).rawAttributes, LotteryViewModel(this.dbService.sequelize).options);
     
     this.userService = new UserService(this.dbService.getModel('User'));
-    this.startHandler = new StartHandler(this.userService);
-    this.adminHandler = new AdminHandler(this.userService, this.bot);
-    this.lotteryHandler = new LotteryHandler(this.userService);
+    this.walletService = new WalletService(this.userService);
+    this.referralService = new ReferralService(this.userService, this.walletService);
+    
+    this.startHandler = new StartHandler(this.userService, this.referralService);
+    this.adminHandler = new AdminHandler(this.userService, this.bot, this.walletService);
+    this.lotteryHandler = new LotteryHandler(this.userService, this.walletService);
     this.testHandler = new TestHandler(this.userService, this.startHandler, this.adminHandler);
+    
+    // Сохраняем ссылки для глобального доступа
+    global.adminHandler = this.adminHandler;
+    global.walletService = this.walletService;
+    global.referralService = this.referralService;
     
     this.setupHandlers();
     logger.info('BotService инициализирован');
@@ -64,11 +74,15 @@ class BotService {
     // Обработчик inline кнопок
     this.bot.action(/buy_ticket_(.+)/, async (ctx) => {
       const lotteryId = parseInt(ctx.match[1]);
-      const ticket = await this.adminHandler.buyTicket(ctx.from.id, lotteryId);
+      const result = await this.adminHandler.buyTicket(ctx.from.id, lotteryId);
       
-      if (ticket) {
-        await ctx.answerCbQuery(`✅ Билет куплен! ID: ${ticket.id}`);
-        await ctx.reply(`🎫 Билет успешно куплен!\n\n🆔 ID билета: ${ticket.id}\n💰 Стоимость: ${ticket.price} руб.`);
+      if (result && result.error === 'insufficient_funds') {
+        await ctx.answerCbQuery('❌ Недостаточно средств');
+        await ctx.reply(`❌ Недостаточно средств\n\n💰 Ваш баланс: ${result.balance} руб.\n💳 Нужно: ${result.required} руб.\n\nПополните кошелек в разделе "💰 Кошелек"`);
+      } else if (result && result.id) {
+        await ctx.answerCbQuery(`✅ Билет куплен! ID: ${result.id}`);
+        const newBalance = await this.walletService.getBalance(ctx.from.id);
+        await ctx.reply(`🎫 Билет успешно куплен!\n\n🆔 ID билета: ${result.id}\n💰 Списано: ${result.price} руб.\n💳 Осталось: ${newBalance} руб.`);
       } else {
         await ctx.answerCbQuery('❌ Розыгрыш не найден');
       }
@@ -87,7 +101,8 @@ class BotService {
     this.bot.hears('🧪 Показать все админ кнопки', (ctx) => this.testHandler.showAllAdminButtons(ctx));
     this.bot.hears('🧪 Симуляция полного процесса', (ctx) => this.testHandler.simulateFullProcess(ctx));
     this.bot.hears('🧪 Тест системы розыгрышей', (ctx) => this.testHandler.testLotterySystem(ctx));
-    this.bot.hears('🔙 Назад в админ-панель', (ctx) => this.testHandler.exitTestMode(ctx));
+    this.bot.hears('🔙 Назад в админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
+    this.bot.hears('🔙 Назад к розыгрышам', (ctx) => this.adminHandler.showLotteries(ctx));
     this.bot.hears('❌ Отмена', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('🔙 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
     
@@ -135,17 +150,28 @@ class BotService {
           await this.lotteryHandler.showHistory(ctx);
           break;
         case '💰 Кошелек':
-          await this.lotteryHandler.showWallet(ctx);
+          await this.walletService.showWallet(ctx);
           break;
         case '💳 Пополнить кошелек':
-          await ctx.reply('💳 ПОПОЛНЕНИЕ КОШЕЛЬКА\n\nВыберите способ пополнения:', 
-            Markup.keyboard([['💳 Банковская карта', '📱 СБП'], ['🔙 Назад']]).resize());
+          await this.walletService.showTopUp(ctx);
           break;
         case '📊 История операций':
-          await ctx.reply('📊 История операций пуста');
+          await this.walletService.showTransactionHistory(ctx);
           break;
         case '📤 Поделиться ссылкой':
-          await ctx.reply('📤 Поделитесь этой ссылкой с друзьями:\nhttps://t.me/your_bot?start=ref_' + ctx.from.id);
+          await this.referralService.shareReferralLink(ctx);
+          break;
+        case '👥 Рефералы':
+          await this.referralService.showReferrals(ctx);
+          break;
+        case '🔙 Назад к кошельку':
+          await this.walletService.showWallet(ctx);
+          break;
+        case '💳 Банковская карта':
+        case '📱 СБП':
+        case '🪙 Криптовалюта':
+        case '💸 Другие способы':
+          await ctx.reply(`💳 ПОПОЛНЕНИЕ ЧЕРЕЗ "${text}"\n\n🔄 Функция в разработке\n\nОбратитесь к администратору для пополнения баланса`);
           break;
         case '🔙 Назад':
           await this.startHandler.handle(ctx);
