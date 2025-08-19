@@ -24,18 +24,45 @@ class AdminHandler {
     }
     
     let message = '🎁 АКТИВНЫЕ РОЗЫГРЫШИ:\n\n';
+    let buttons = [];
     
     for (const [id, lottery] of this.activeLotteries) {
-      const views = this.getViews(id);
-      const participants = this.getParticipants(id);
-      const ticketsCount = this.getTicketsCount(id);
-      
       message += `🎁 ${lottery.title}\n`;
-      message += `👁 Просмотров: ${views}\n`;
-      message += `👥 Участников: ${participants}\n`;
-      message += `🎫 Куплено билетов: ${ticketsCount}/${lottery.maxTickets}\n`;
       message += `📅 Окончание: ${lottery.endDate} в ${lottery.endTime}\n\n`;
+      
+      buttons.push([`📊 Статистика - ${lottery.title}`]);
     }
+    
+    const keyboard = Markup.keyboard(buttons).resize();
+    await ctx.reply(message, keyboard);
+  }
+  
+  async showLotteryStats(ctx, lotteryTitle) {
+    if (!this.isAdmin(ctx)) return;
+    
+    let targetLottery = null;
+    for (const [id, lottery] of this.activeLotteries) {
+      if (lottery.title === lotteryTitle) {
+        targetLottery = { id, ...lottery };
+        break;
+      }
+    }
+    
+    if (!targetLottery) {
+      await ctx.reply('❌ Розыгрыш не найден');
+      return;
+    }
+    
+    const views = this.getViews(targetLottery.id);
+    const participants = this.getParticipants(targetLottery.id);
+    const ticketsCount = this.getTicketsCount(targetLottery.id);
+    
+    const message = `📊 СТАТИСТИКА РОЗЫГРЫША\n\n` +
+      `🎁 ${targetLottery.title}\n\n` +
+      `👁 Просмотров: ${views} чел.\n` +
+      `👥 Купили билеты: ${participants} чел.\n` +
+      `🎫 Всего билетов: ${ticketsCount}/${targetLottery.maxTickets}\n` +
+      `📅 Окончание: ${targetLottery.endDate} в ${targetLottery.endTime}`;
     
     await ctx.reply(message);
   }

@@ -53,6 +53,9 @@ class BotService {
     this.bot.hears('🛠 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('📊 Статистика', (ctx) => this.adminHandler.showStats(ctx));
     this.bot.hears('👥 Подписчики', (ctx) => this.adminHandler.showSubscribers(ctx));
+    this.bot.hears('🎁 Розыгрыши', (ctx) => this.adminHandler.showLotteries(ctx));
+    this.bot.hears('💰 Баланс', (ctx) => this.adminHandler.showBalance(ctx));
+    this.bot.hears('🏆 Узнать победителя', (ctx) => this.adminHandler.findWinner(ctx));
     this.bot.hears('➕ Добавить розыгрыш', (ctx) => this.adminHandler.startLotteryCreation(ctx));
     this.bot.hears('👁 Просмотреть', (ctx) => this.adminHandler.previewLottery(ctx));
     this.bot.hears('✏️ Редактировать', (ctx) => this.adminHandler.editLottery(ctx));
@@ -109,9 +112,15 @@ class BotService {
       // Обработка только текстовых сообщений
       if (!ctx.message.text) return;
       
-      // Обработка основных кнопок
+      // Проверяем статистику розыгрыша
       const text = ctx.message.text;
+      if (text && text.startsWith('📊 Статистика - ')) {
+        const lotteryTitle = text.replace('📊 Статистика - ', '');
+        await this.adminHandler.showLotteryStats(ctx, lotteryTitle);
+        return;
+      }
       
+      // Обработка основных кнопок
       switch (text) {
         case '🎁 Розыгрыш':
           await this.lotteryHandler.showLotteries(ctx);
