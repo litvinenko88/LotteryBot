@@ -20,9 +20,14 @@ class BotService {
     this.dbService = new DatabaseService(sequelize);
     await this.dbService.init();
     
-    // Регистрируем модель Lottery
+    // Регистрируем модели
     const LotteryModel = require('../models/Lottery');
+    const TicketModel = require('../models/Ticket');
+    const LotteryViewModel = require('../models/LotteryView');
+    
     this.dbService.sequelize.define('Lottery', LotteryModel(this.dbService.sequelize).rawAttributes, LotteryModel(this.dbService.sequelize).options);
+    this.dbService.sequelize.define('Ticket', TicketModel(this.dbService.sequelize).rawAttributes, TicketModel(this.dbService.sequelize).options);
+    this.dbService.sequelize.define('LotteryView', LotteryViewModel(this.dbService.sequelize).rawAttributes, LotteryViewModel(this.dbService.sequelize).options);
     
     this.userService = new UserService(this.dbService.getModel('User'));
     this.startHandler = new StartHandler(this.userService);
@@ -54,8 +59,16 @@ class BotService {
     this.bot.hears('✅ Добавить', (ctx) => this.adminHandler.saveLottery(ctx));
     
     // Обработчик inline кнопок
-    this.bot.action('buy_ticket', (ctx) => {
-      ctx.answerCbQuery('🎫 Покупка билетов в разработке');
+    this.bot.action(/buy_ticket_(.+)/, async (ctx) => {
+      const lotteryId = parseInt(ctx.match[1]);
+      const ticket = await this.adminHandler.buyTicket(ctx.from.id, lotteryId);
+      
+      if (ticket) {
+        await ctx.answerCbQuery(`✅ Билет куплен! ID: ${ticket.id}`);
+        await ctx.reply(`🎫 Билет успешно куплен!\n\n🆔 ID билета: ${ticket.id}\n💰 Стоимость: ${ticket.price} руб.`);
+      } else {
+        await ctx.answerCbQuery('❌ Розыгрыш не найден');
+      }
     });
     this.bot.hears('🏆 Завершить розыгрыш', (ctx) => this.lotteryHandler.finishLottery(ctx));
     this.bot.hears('💰 Установить цену', (ctx) => this.lotteryHandler.setPrice(ctx));
@@ -70,6 +83,7 @@ class BotService {
     this.bot.hears('🧪 Показать все кнопки пользователя', (ctx) => this.testHandler.showAllUserButtons(ctx));
     this.bot.hears('🧪 Показать все админ кнопки', (ctx) => this.testHandler.showAllAdminButtons(ctx));
     this.bot.hears('🧪 Симуляция полного процесса', (ctx) => this.testHandler.simulateFullProcess(ctx));
+    this.bot.hears('🧪 Тест системы розыгрышей', (ctx) => this.testHandler.testLotterySystem(ctx));
     this.bot.hears('🔙 Назад в админ-панель', (ctx) => this.testHandler.exitTestMode(ctx));
     this.bot.hears('❌ Отмена', (ctx) => this.adminHandler.showPanel(ctx));
     this.bot.hears('🔙 Админ-панель', (ctx) => this.adminHandler.showPanel(ctx));

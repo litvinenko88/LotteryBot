@@ -5,7 +5,10 @@ class AdminHandler {
   constructor(userService, bot) {
     this.userService = userService;
     this.bot = bot;
-    this.lotteryCreation = new Map(); // Храним состояние создания розыгрыша
+    this.lotteryCreation = new Map();
+    this.activeLotteries = new Map(); // Активные розыгрыши
+    this.tickets = new Map(); // Билеты
+    this.views = new Map(); // Просмотры
   }
 
   isAdmin(ctx) {
@@ -14,7 +17,43 @@ class AdminHandler {
 
   async showLotteries(ctx) {
     if (!this.isAdmin(ctx)) return;
-    await ctx.reply('🎁 Розыгрыши\n\nСписок активных розыгрышей пуст');
+    
+    if (this.activeLotteries.size === 0) {
+      await ctx.reply('🎁 Розыгрыши\n\nСписок активных розыгрышей пуст');
+      return;
+    }
+    
+    let message = '🎁 АКТИВНЫЕ РОЗЫГРЫШИ:\n\n';
+    
+    for (const [id, lottery] of this.activeLotteries) {
+      const views = this.getViews(id);
+      const participants = this.getParticipants(id);
+      const ticketsCount = this.getTicketsCount(id);
+      
+      message += `🎁 ${lottery.title}\n`;
+      message += `👁 Просмотров: ${views}\n`;
+      message += `👥 Участников: ${participants}\n`;
+      message += `🎫 Куплено билетов: ${ticketsCount}/${lottery.maxTickets}\n`;
+      message += `📅 Окончание: ${lottery.endDate} в ${lottery.endTime}\n\n`;
+    }
+    
+    await ctx.reply(message);
+  }
+  
+  getViews(lotteryId) {
+    return Array.from(this.views.values()).filter(v => v.lotteryId === lotteryId).length;
+  }
+  
+  getParticipants(lotteryId) {
+    const participants = new Set();
+    Array.from(this.tickets.values())
+      .filter(t => t.lotteryId === lotteryId)
+      .forEach(t => participants.add(t.userId));
+    return participants.size;
+  }
+  
+  getTicketsCount(lotteryId) {
+    return Array.from(this.tickets.values()).filter(t => t.lotteryId === lotteryId).length;
   }
 
   async showBalance(ctx) {
@@ -190,14 +229,94 @@ class AdminHandler {
     const creation = this.lotteryCreation.get(ctx.from.id);
     if (!creation) return;
 
-    // Сохраняем в базу (заглушка)
     const lotteryId = Date.now();
+    creation.id = lotteryId;
     
-    // Уведомляем всех подписчиков (с проверкой времени)
+    // Сохраняем в активные розыгрыши
+    this.activeLotteries.set(lotteryId, creation);
+    
+    // Устанавливаем таймер на окончание
+    this.scheduleDrawing(creation);
+    
+    // Уведомляем всех подписчиков
     await this.notifyAllUsers(creation, ctx);
     
     this.lotteryCreation.delete(ctx.from.id);
     await this.showPanel(ctx);
+  }
+  
+  scheduleDrawing(lottery) {
+    const now = new Date();
+    const [day, month, year] = lottery.endDate.split('.');
+    const [hours, minutes] = lottery.endTime.split(':');
+    const endDate = new Date(year, month - 1, day, hours, minutes);
+    
+    if (endDate > now) {
+      setTimeout(() => {
+        this.conductDrawing(lottery.id);
+      }, endDate.getTime() - now.getTime());
+    }
+  }
+  
+  async conductDrawing(lotteryId) {
+    const lottery = this.activeLotteries.get(lotteryId);
+    if (!lottery) return;
+    
+    const lotteryTickets = Array.from(this.tickets.values()).filter(t => t.lotteryId === lotteryId);
+    
+    if (lotteryTickets.length === 0) {
+      this.activeLotteries.delete(lotteryId);
+      return;
+    }
+    
+    // Выбираем случайный билет
+    const winningTicket = lotteryTickets[Math.floor(Math.random() * lotteryTickets.length)];
+    
+    // Отправляем уведомление победителю
+    await this.notifyWinner(winningTicket, lottery);
+    
+    // Удаляем розыгрыш из активных
+    this.activeLotteries.delete(lotteryId);
+  }
+  
+  async notifyWinner(ticket, lottery) {
+    try {
+      const message = `🎉 ПОЗДРАВЛЯЕМ!\n\nВы выиграли в розыгрыше!\n\n🎁 Приз: ${lottery.title}\n🎫 Выигрышный билет: ${ticket.id}\n\nСвяжитесь с администратором для получения приза!`;
+      
+      const imagePath = require('path').join(process.cwd(), 'images', 'pobeda.jpeg');
+      
+      if (require('fs').existsSync(imagePath)) {
+        await this.bot.telegram.sendPhoto(ticket.userId, { source: imagePath }, { caption: message });
+      } else {
+        await this.bot.telegram.sendMessage(ticket.userId, message);
+      }
+    } catch (error) {
+      console.error('Ошибка уведомления победителя:', error);
+    }
+  }
+  
+  async buyTicket(userId, lotteryId) {
+    const lottery = this.activeLotteries.get(lotteryId);
+    if (!lottery) return null;
+    
+    const ticketId = `T${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const ticket = {
+      id: ticketId,
+      lotteryId: lotteryId,
+      userId: userId,
+      price: lottery.price,
+      createdAt: new Date()
+    };
+    
+    this.tickets.set(ticketId, ticket);
+    return ticket;
+  }
+  
+  recordView(userId, lotteryId) {
+    const viewId = `${userId}_${lotteryId}`;
+    if (!this.views.has(viewId)) {
+      this.views.set(viewId, { userId, lotteryId, createdAt: new Date() });
+    }
   }
 
   async notifyAllUsers(lottery, ctx) {
@@ -231,7 +350,7 @@ class AdminHandler {
       const message = `🎉 НОВЫЙ РОЗЫГРЫШ!\n\n🎁 ${lottery.title}\n\n💰 Стоимость билета: ${lottery.price} руб.\n🎫 Куплено билетов: 0/${lottery.maxTickets}\n📅 Окончание: ${lottery.endDate} в ${lottery.endTime}\n\n📝 ${lottery.description}\n\n🔗 ${lottery.link}`;
       
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🎫 Купить билет', 'buy_ticket')]
+        [Markup.button.callback('🎫 Купить билет', `buy_ticket_${lottery.id}`)]
       ]);
       
       for (const user of users) {
@@ -240,6 +359,9 @@ class AdminHandler {
             caption: message,
             reply_markup: keyboard.reply_markup
           });
+          
+          // Записываем просмотр
+          this.recordView(user.telegramId, lottery.id);
         } catch (error) {
           // Пропускаем ошибки отправки
         }
