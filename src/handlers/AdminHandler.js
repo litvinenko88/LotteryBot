@@ -1,5 +1,7 @@
 const { Markup } = require('telegraf');
 const config = require('../config');
+const fs = require('fs');
+const path = require('path');
 
 class AdminHandler {
   constructor(userService, bot, walletService) {
@@ -10,17 +12,56 @@ class AdminHandler {
     this.activeLotteries = new Map();
     this.tickets = new Map();
     this.views = new Map();
+    this.dataFile = path.join(process.cwd(), 'lottery_data.json');
+    this.loadData();
   }
 
   isAdmin(ctx) {
     return String(ctx.from.id) === config.ADMIN_ID;
   }
 
+  loadData() {
+    try {
+      if (fs.existsSync(this.dataFile)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFile, 'utf8'));
+        if (data.activeLotteries) {
+          this.activeLotteries = new Map(Object.entries(data.activeLotteries));
+          // Восстанавливаем таймеры для активных розыгрышей
+          for (const [id, lottery] of this.activeLotteries) {
+            this.scheduleDrawing(lottery);
+          }
+        }
+        if (data.tickets) {
+          this.tickets = new Map(Object.entries(data.tickets));
+        }
+        if (data.views) {
+          this.views = new Map(Object.entries(data.views));
+        }
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+    }
+  }
+
+  saveData() {
+    try {
+      const data = {
+        activeLotteries: Object.fromEntries(this.activeLotteries),
+        tickets: Object.fromEntries(this.tickets),
+        views: Object.fromEntries(this.views)
+      };
+      fs.writeFileSync(this.dataFile, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Ошибка сохранения данных:', error);
+    }
+  }
+
   async showLotteries(ctx) {
     if (!this.isAdmin(ctx)) return;
     
     if (this.activeLotteries.size === 0) {
-      await ctx.reply('🎁 Розыгрыши\n\nСписок активных розыгрышей пуст');
+      const keyboard = Markup.keyboard([['🔙 Назад в админ-панель']]).resize();
+      await ctx.reply('🎁 Розыгрыши\n\nСписок активных розыгрышей пуст', keyboard);
       return;
     }
     
@@ -34,6 +75,7 @@ class AdminHandler {
       buttons.push([`📊 Статистика - ${lottery.title}`]);
     }
     
+    buttons.push(['🔙 Назад в админ-панель']);
     const keyboard = Markup.keyboard(buttons).resize();
     await ctx.reply(message, keyboard);
   }
@@ -65,7 +107,9 @@ class AdminHandler {
       `🎫 Всего билетов: ${ticketsCount}/${targetLottery.maxTickets}\n` +
       `📅 Окончание: ${targetLottery.endDate} в ${targetLottery.endTime}`;
     
-    await ctx.reply(message);
+    const { Markup } = require('telegraf');
+    const keyboard = Markup.keyboard([['🔙 Назад к розыгрышам']]).resize();
+    await ctx.reply(message, keyboard);
   }
   
   getViews(lotteryId) {
@@ -262,6 +306,7 @@ class AdminHandler {
     
     // Сохраняем в активные розыгрыши
     this.activeLotteries.set(lotteryId, creation);
+    this.saveData();
     
     // Устанавливаем таймер на окончание
     this.scheduleDrawing(creation);
@@ -305,6 +350,7 @@ class AdminHandler {
     
     // Удаляем розыгрыш из активных
     this.activeLotteries.delete(lotteryId);
+    this.saveData();
   }
   
   async notifyWinner(ticket, lottery) {
@@ -348,6 +394,7 @@ class AdminHandler {
     };
     
     this.tickets.set(ticketId, ticket);
+    this.saveData();
     return ticket;
   }
   
@@ -355,6 +402,7 @@ class AdminHandler {
     const viewId = `${userId}_${lotteryId}`;
     if (!this.views.has(viewId)) {
       this.views.set(viewId, { userId, lotteryId, createdAt: new Date() });
+      this.saveData();
     }
   }
 
